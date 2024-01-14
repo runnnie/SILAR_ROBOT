@@ -1,20 +1,36 @@
 
 #include <Wire.h>			// libreria de comunicacion por I2C
 #include <LCD.h>			// libreria para funciones de LCD
-#include <LiquidCrystal_I2C.h>		// libreria para LCD por I2C
+#include <LiquidCrystal_I2C.h>		// libreria para LCD por I2C                                                   
 #include <RTClib.h>
 
 LiquidCrystal_I2C lcd (0x27, 2, 1, 0, 4, 5, 6, 7); // DIR, E, RW, RS, D4, D5, D6, D7
 
 RTC_DS3231 rtc;
 
-int A = 32; 			//variable A a pin digital 2 (DT en modulo)
-int B = 33;  			//variable B a pin digital 4 (CLK en modulo)
-int C = 25;
-int D = 26;
+//int A = 32; 			//variable A a pin digital 2 (DT en modulo)
+//int B = 33;  			//variable B a pin digital 4 (CLK en modulo)
+//int C = 25;
+//int D = 26;
 
-int E = 27;
-int F = 14;
+//int E = 27;
+//int F = 14;
+
+
+int A = 15; 			//variable A a pin digital 2 (DT en modulo)
+int B = 2;  			//variable B a pin digital 4 (CLK en modulo)
+int C = 16;
+
+
+int E = 0;
+int F = 4;
+int D = 17;
+
+
+
+
+
+
 
 int NUMERO_PASO;
 
@@ -327,9 +343,9 @@ if (POSICION_2 != ANTERIOR_B) {	// si el valor de POSICION_1 es distinto de ANTE
 
 void menu_inicial(){
   lcd.setCursor(1,0);
-  lcd.print("Iniciar");
+  lcd.print("INICIAR");
   lcd.setCursor(1,1);
-  lcd.print("Configuracion");
+  lcd.print("CONFIGURACION");
 
   if (POSICION_1 >=0 && POSICION_1 <POSICION_A+5){
     lcd.setCursor(0,1);
@@ -555,7 +571,7 @@ while(POSICION_1 >=POSICION_A+15 && POSICION_1 <POSICION_A+20){
 void num_capas(){
 
   lcd.setCursor(2,1);
-  lcd.print("Numero de capas:");
+  lcd.print("NUMERO DE CAPAS:");
   lcd.setCursor(0,2);
   lcd.print("         ");
   lcd.print(POSICION_1);
@@ -600,7 +616,7 @@ void nuevo_modo(){
   DateTime fecha = rtc.now();
 
   lcd.setCursor(0, 3);		// ubica cursor en columna 0 y linea 1
-  lcd.print("Hora: ");
+  lcd.print("HORA: ");
   lcd.print(fecha.hour());		// funcion millis() / 1000 para segundos transcurridos
   lcd.print(":");
   lcd.print(fecha.minute());		// funcion millis() / 1000 para segundos transcurridos
