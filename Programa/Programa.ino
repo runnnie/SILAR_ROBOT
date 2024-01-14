@@ -4,30 +4,34 @@
 #include <LiquidCrystal_I2C.h>		// libreria para LCD por I2C                                                   
 #include <RTClib.h>
 
+TaskHandle_t Tarea0;
+
+
 LiquidCrystal_I2C lcd (0x27, 2, 1, 0, 4, 5, 6, 7); // DIR, E, RW, RS, D4, D5, D6, D7
 
 RTC_DS3231 rtc;
 
-//int A = 32; 			//variable A a pin digital 2 (DT en modulo)
-//int B = 33;  			//variable B a pin digital 4 (CLK en modulo)
-//int C = 25;
-//int D = 26;
-
-//int E = 27;
-//int F = 14;
 
 
-int A = 15; 			//variable A a pin digital 2 (DT en modulo)
-int B = 2;  			//variable B a pin digital 4 (CLK en modulo)
-int C = 16;
+int A = 33; 			//variable A a pin digital 2 (DT en modulo)
+int B = 32;  			//variable B a pin digital 4 (CLK en modulo)
+int C = 39;
 
 
-int E = 0;
-int F = 4;
-int D = 17;
+int E = 35;
+int F = 34;
+int D = 36;
 
 
 
+
+int DIRX = 25;
+int PULX = 26;
+
+int DIRY = 27;
+int PULY = 14;
+
+int VEL = 200;
 
 
 
@@ -62,6 +66,9 @@ void setup()
 {
 
 
+
+  xTaskCreatePinnedToCore(loop0,"Tarea_0",1000,NULL,1,&Tarea0,1);
+
   lcd.setBacklightPin(3,POSITIVE);	// puerto P3 de PCF8574 como positivo
   lcd.setBacklight(HIGH);		// habilita iluminacion posterior de LCD
   lcd.begin(20,4);			// 16 columnas por 2 lineas para LCD 1602A
@@ -81,14 +88,18 @@ void setup()
   pinMode(E, INPUT_PULLUP);
   pinMode(F, INPUT_PULLUP);
 
+  pinMode(DIRX,OUTPUT);
+  pinMode(DIRY,OUTPUT);
+  pinMode(PULX,OUTPUT);
+  pinMode(PULY,OUTPUT);
 
-  Serial.begin(9600);		// incializacion de comunicacion serie a 9600 bps
-
-  attachInterrupt(digitalPinToInterrupt(A), encoder1, FALLING);// interrupcion sobre pin A con
-  attachInterrupt(digitalPinToInterrupt(E), encoder2, FALLING);// interrupcion sobre pin A con
+  Serial.begin(115200);		// incializacion de comunicacion serie a 9600 bps
 
   attachInterrupt(digitalPinToInterrupt(D), push_a, FALLING);// interrupcion sobre pin A con
   attachInterrupt(digitalPinToInterrupt(C), push_b, FALLING);// interrupcion sobre pin A con
+  attachInterrupt(digitalPinToInterrupt(A), encoder1, FALLING);// interrupcion sobre pin A con
+  attachInterrupt(digitalPinToInterrupt(E), encoder2, FALLING);// interrupcion sobre pin A con
+
 
 							  // funcion ISR encoder1 y modo LOW
   Serial.println("Listo");	// imprime en monitor serial Listo
@@ -99,6 +110,48 @@ void setup()
 
 
 void loop(){
+
+
+  
+  if(Serial.available()){
+  int STEPS = Serial.parseInt();
+  Serial.println(STEPS);
+
+
+    if(STEPS > 0){
+      digitalWrite(DIRX,HIGH);
+      digitalWrite(DIRY,HIGH);
+
+
+
+      for(int i = 0;i<STEPS;i++){
+        digitalWrite(PULX,HIGH);
+        digitalWrite(PULY,HIGH);
+        delayMicroseconds(VEL);
+        digitalWrite(PULX,LOW);
+        digitalWrite(PULY,LOW);
+        delayMicroseconds(VEL);
+      }
+    }
+
+    if(STEPS < 0){
+      digitalWrite(DIRX,LOW);
+      digitalWrite(DIRY,LOW);
+      STEPS = STEPS*-1;
+      for(int i = 0;i<STEPS;i++){
+        digitalWrite(PULX,HIGH);
+        digitalWrite(PULY,HIGH);
+        delayMicroseconds(VEL);
+        digitalWrite(PULX,LOW);
+        digitalWrite(PULY,LOW);
+        delayMicroseconds(VEL);
+      }
+
+
+    }
+  
+  }
+
 
   //Menú principal
 
@@ -132,7 +185,7 @@ void loop(){
 
 
         if (POSICION_1 != ANTERIOR_A) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-          Serial.println(POSICION_1);	// imprime valor de POSICION_1
+          Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
           ANTERIOR_A = POSICION_1 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
 
         }
@@ -182,7 +235,7 @@ void loop(){
                 lcd.print("MODOS:");
 
                 if (POSICION_1 != ANTERIOR_A) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-                  Serial.println(POSICION_1);	// imprime valor de POSICION_1
+                  Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
                   ANTERIOR_A = POSICION_1 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
                 }
 
@@ -217,12 +270,12 @@ void loop(){
                 sub_menu_tiempo();
 
                 if (POSICION_1 != ANTERIOR_A) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-                  Serial.println(POSICION_1);	// imprime valor de POSICION_1
+                  Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
                   ANTERIOR_A = POSICION_1 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
                 }
 
                 if (POSICION_2 != ANTERIOR_B) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-                    Serial.println(POSICION_2);	// imprime valor de POSICION_1
+                    Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
                     ANTERIOR_B = POSICION_2 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
                   }
 
@@ -259,13 +312,13 @@ void loop(){
                 nuevo_modo();
 
                 if (POSICION_1 != ANTERIOR_A) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-                    Serial.println(POSICION_1);	// imprime valor de POSICION_1
+                    Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
                     ANTERIOR_A = POSICION_1 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
                   }
 
 
                 if (POSICION_2 != ANTERIOR_B) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-                    Serial.println(POSICION_2);	// imprime valor de POSICION_1
+                    Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
                     ANTERIOR_B = POSICION_2 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
                   }
                 if (boleana == 1){
@@ -290,12 +343,12 @@ void loop(){
 
 
         if (POSICION_1 != ANTERIOR_A) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-            Serial.println(POSICION_1);	// imprime valor de POSICION_1
+            Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
             ANTERIOR_A = POSICION_1 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
           }
 
         if (POSICION_2 != ANTERIOR_B) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-            Serial.println(POSICION_2);	// imprime valor de POSICION_1
+            Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
             ANTERIOR_B = POSICION_2 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
           }
 
@@ -326,11 +379,11 @@ void loop(){
 
 
 if (POSICION_1 != ANTERIOR_A) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-    Serial.println(POSICION_1);	// imprime valor de POSICION_1
+    Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
     ANTERIOR_A = POSICION_1 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
   }
 if (POSICION_2 != ANTERIOR_B) {	// si el valor de POSICION_1 es distinto de ANTERIOR_A
-    Serial.println(POSICION_2);	// imprime valor de POSICION_1
+    Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));	// imprime valor de POSICION_1
     ANTERIOR_B = POSICION_2 ;	// asigna a ANTERIOR_A el valor actualizado de POSICION_1
   }
 
@@ -420,7 +473,7 @@ void sub_menu(){
     POSICION_A = POSICION_1-14;
   }
 
-  Serial.println(POSICION_1);
+  Serial.println("x: "+ String(POSICION_1)+ " y: "+ String(POSICION_2));
 
 }
 
@@ -626,43 +679,20 @@ void nuevo_modo(){
   }
 
 
-void push_a(){
 
-    
 
-    //Variable la cual hará que en determinado menú, nos regresemos al ANTERIOR_A
-  if(digitalRead(D) == LOW){
-    Serial.println("FUNCIONA1");
-    boleana = 1;
-    // Espera hasta que pase el intervalo
+
+
+
+
+void loop0(void *parameter){
+  while(1==1){
+    delay(50);
   }
-
-
-
+  vTaskDelay(10);  
   
-
-
 }
 
-void push_b(){
-
-  
-  if (POSICION_1 >=0 && POSICION_1 <POSICION_A+5){
-    Serial.println("OPCION1");
-    aux = 1;
-  } 
-  
-  if(POSICION_1 >=POSICION_A+5 && POSICION_1 <POSICION_A+10){
-    Serial.println("OPCION2");
-    aux = 2;
-  } 
-
-
-  if(POSICION_1 >=POSICION_A+10 && POSICION_1 <POSICION_A+15 && aux_submenu==1){
-    Serial.println("OPCION2");
-    aux = 3;
-  } 
-  }
 
 
 
@@ -732,13 +762,48 @@ void encoder2()  {
 						// superior de 100 para POSICION_1
     ultimaInterrupcion = tiempoInterrupcion;	// guarda valor actualizado del tiempo
  
-  Serial.println(POSICION_2);
 
   }						// de la interrupcion en variable static
 
 }
 
+void push_a(){
 
+    
+
+    //Variable la cual hará que en determinado menú, nos regresemos al ANTERIOR_A
+  if(digitalRead(D) == LOW){
+    Serial.println("FUNCIONA1");
+    boleana = 1;
+    // Espera hasta que pase el intervalo
+  }
+
+
+
+  
+
+
+}
+
+void push_b(){
+
+  
+  if (POSICION_1 >=0 && POSICION_1 <POSICION_A+5){
+    Serial.println("OPCION1");
+    aux = 1;
+  } 
+  
+  if(POSICION_1 >=POSICION_A+5 && POSICION_1 <POSICION_A+10){
+    Serial.println("OPCION2");
+    aux = 2;
+  } 
+
+
+  if(POSICION_1 >=POSICION_A+10 && POSICION_1 <POSICION_A+15 && aux_submenu==1){
+    Serial.println("OPCION2");
+    aux = 3;
+  } 
+  }
 int max(int num1, int num2) {
     if (num1 > num2) {
         return num1;
@@ -755,3 +820,4 @@ int min(int num1, int num2) {
         return num1;
     }
 }
+
