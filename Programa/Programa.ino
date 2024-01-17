@@ -5,12 +5,14 @@
 #include <RTClib.h>
 
 TaskHandle_t Tarea0;
-
+int boleano = false;
 
 LiquidCrystal_I2C lcd (0x27, 2, 1, 0, 4, 5, 6, 7); // DIR, E, RW, RS, D4, D5, D6, D7
 
 RTC_DS3231 rtc;
 
+int STEPSY=0;
+int STEPSX=0;
 
 
 int A = 33; 			//variable A a pin digital 2 (DT en modulo)
@@ -57,6 +59,10 @@ int ANTERIOR_B = 0;
 volatile int POSICION_B=0;
 volatile int POSICION_2=0;
 
+
+volatile int auxiliar1 = 0; 
+volatile int auxiliar2 = 0;
+
 int tiempo1=10;
 int  tiempo2=5;
 int  tiempo3=10;
@@ -67,7 +73,7 @@ void setup()
 
 
 
-  xTaskCreatePinnedToCore(loop0,"Tarea_0",1000,NULL,1,&Tarea0,1);
+  xTaskCreatePinnedToCore(loop0,"Tarea_0",1000,NULL,tskIDLE_PRIORITY,&Tarea0,0);
 
   lcd.setBacklightPin(3,POSITIVE);	// puerto P3 de PCF8574 como positivo
   lcd.setBacklight(HIGH);		// habilita iluminacion posterior de LCD
@@ -110,6 +116,77 @@ void setup()
 
 
 void loop(){
+
+
+  while(auxiliar1 < STEPSX){
+  
+  boleano = true;
+
+  digitalWrite(DIRX,HIGH);
+
+  
+  for(int i = 0;i<300;i++){
+    digitalWrite(PULX,HIGH);
+    delayMicroseconds(VEL);
+    digitalWrite(PULX,LOW);
+    delayMicroseconds(VEL);
+  }
+  auxiliar1+=300;
+  }
+  
+  while(auxiliar1 > STEPSX){
+
+
+    boleano = true;
+
+  
+    digitalWrite(DIRX,LOW);
+
+    for(int i = 0;i<300;i++){
+      digitalWrite(PULX,HIGH);
+      delayMicroseconds(VEL);
+      digitalWrite(PULX,LOW);
+      delayMicroseconds(VEL);
+    }
+
+  auxiliar1-=300;
+
+  }
+
+  while(auxiliar2 < STEPSY){
+
+
+    boleano = true;
+    digitalWrite(DIRY,HIGH);
+
+    for(int i = 0;i<200;i++){
+      digitalWrite(PULY,HIGH);
+      delayMicroseconds(VEL);
+      digitalWrite(PULY,LOW);
+      delayMicroseconds(VEL);
+    }
+  
+  auxiliar2+=200;
+
+  }
+  
+  while(auxiliar2 > STEPSY){
+
+    boleano = true;
+  
+    digitalWrite(DIRY,LOW);
+
+    for(int i = 0;i<200;i++){
+      digitalWrite(PULY,HIGH);
+      delayMicroseconds(VEL);
+      digitalWrite(PULY,LOW);
+      delayMicroseconds(VEL);
+    }
+  auxiliar2-= 200;
+  }
+
+
+
 
 
   
@@ -687,7 +764,9 @@ void nuevo_modo(){
 
 void loop0(void *parameter){
   while(1==1){
-    delay(50);
+    
+
+  boleano = false;
   }
   vTaskDelay(10);  
   
@@ -706,13 +785,15 @@ void encoder1()  {
     if (digitalRead(B) == HIGH)			// si B es HIGH, sentido horario
     {
       POSICION_1++ ;				// incrementa POSICION_1 en 1
+      STEPSX=STEPSX+300;
     }
     else {					// si B es LOW, senti anti horario
       POSICION_1-- ;				// decrementa POSICION_1 en 1
+      STEPSX=STEPSX-300;
     }
 
 
-
+/*
     if (POSICION_1 >100){
       POSICION_1 = 0;
       POSICION_A = 0;
@@ -721,8 +802,10 @@ void encoder1()  {
       POSICION_1 = 100;
       POSICION_A = 80;
     }
+*/
+    POSICION_1 = min(100, max(0, POSICION_1));	// establece limite inferior de 0 y
+    STEPSX = min(30000, max(0, STEPSX));	// establece limite inferior de 0 y
 
-    //POSICION_1 = min(55, max(50, POSICION_1));	// establece limite inferior de 0 y
 						// superior de 100 para POSICION_1
     ultimaInterrupcion = tiempoInterrupcion;	// guarda valor actualizado del tiempo
   }						// de la interrupcion en variable static
@@ -742,14 +825,16 @@ void encoder2()  {
     if (digitalRead(F) == HIGH)			// si B es HIGH, sentido horario
     {
       POSICION_2++ ;				// incrementa POSICION_1 en 1
+      STEPSY=STEPSY+200;
     }
     else {					// si B es LOW, senti anti horario
       POSICION_2-- ;				// decrementa POSICION_1 en 1
+      STEPSY=STEPSY-200;
     }
 
 
 
-    if (POSICION_2 >100){
+    /*if (POSICION_2 >100){
       POSICION_2 = 0;
       POSICION_B = 0;
     }
@@ -757,8 +842,10 @@ void encoder2()  {
       POSICION_2 = 100;
       POSICION_B = 80;
     }
+*/
+    POSICION_2 = min(100, max(0, POSICION_2));	// establece limite inferior de 0 y
+    STEPSY = min(20000, max(0, STEPSY));	// establece limite inferior de 0 y
 
-    //POSICION_1 = min(55, max(50, POSICION_1));	// establece limite inferior de 0 y
 						// superior de 100 para POSICION_1
     ultimaInterrupcion = tiempoInterrupcion;	// guarda valor actualizado del tiempo
  
