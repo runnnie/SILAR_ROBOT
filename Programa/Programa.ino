@@ -5,9 +5,21 @@
 #include <RTClib.h>
 
 
+#include "FS.h"
+#include "SD.h"
+#include "SPI.h"
+
+
+
+
+
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7);  // DIR, E, RW, RS, D4, D5, D6, D7
 
 RTC_DS3231 rtc;
+
+
+const int chipSelect = 5;  // Pin CS para la tarjeta SD
+const char *nombreArchivo = "/pos.txt";
 
 //Stepper motor
 //Counters for movements of stepper motors
@@ -104,6 +116,8 @@ void setup() {
   Serial.begin(115200);
   Serial.println("Listo");  // imprime en monitor serial Listo
 
+
+
   if (!rtc.begin()) {
     Serial.println("¡Modulo RTC no encontrado!");
     while (1)
@@ -111,6 +125,15 @@ void setup() {
   }
   //rtc.adjust(DateTime(2023,08,10,11,17))
   //rtc.adjust(DateTime(__DATE__,__TIME__));
+
+
+
+
+  if (!SD.begin(chipSelect)) {
+    Serial.println("La inicialización de la tarjeta SD falló. Verifique la tarjeta SD en el ESP32 o Arduino.");
+    return;
+  }
+  Serial.println("La tarjeta SD se ha inicializado correctamente.");
 }
 
 
@@ -313,8 +336,7 @@ void loop() {
 
           case 3:
             lcd.clear();
-            POS_A = 0;
-            POS_B = 0;
+
             AUX_POS_A = 0;
             AUX_POS_B = 0;
 
@@ -322,11 +344,25 @@ void loop() {
             AUX_PRINT_B = 0;
 
             NUMERO_PASO = 0;
-            AUX_STEPS_X = 0;
-            AUX_STEPS_Y = 0;
-            STEPSX = 0;
-            STEPSY = 0;
+            leerConfiguracion();
 
+            if(AUX_STEPS_X != 0){
+              STEPSX = AUX_STEPS_X;
+              POS_A = AUX_STEPS_X/150;
+            }else{
+              AUX_STEPS_X = 0;
+              STEPSX = 0;
+              POS_A = 0;
+
+            }
+            if(AUX_STEPS_Y != 0){
+              STEPSY = AUX_STEPS_Y ;
+              AUX_POS_B = AUX_STEPS_Y/100;
+            }else{
+              POS_B = 0;
+              STEPSY = 0;
+              AUX_STEPS_Y = 0;
+            }
 
             while (1) {
               if (digitalRead(BUTTON_B) == LOW) {
@@ -642,6 +678,8 @@ void nuevo_modo() {
   // Movimiento de motor x
 
 
+ 
+  
   motor_movement();
 
   if (digitalRead(BUTTON_A) == LOW) {
@@ -740,11 +778,10 @@ void encoder1() {
 
     // superior de 100 para POS_A
     ultimaInterrupcion = tiempoInterrupcion;  // guarda valor actualizado del tiempo
-  }                                           // de la interrupcion en variable static
+  }          
+                                   // de la interrupcion en variable static
+
 }
-
-
-
 
 
 void encoder2() {
@@ -775,13 +812,58 @@ void encoder2() {
     }
 */
     AUX_POS_B = min(100, max(0, AUX_POS_B));  // establece limite inferior de 0 y
+
+
+
+
     STEPSY = min(10000, max(0, STEPSY));      // establece limite inferior de 0 y
 
+    //savesteps();
     // superior de 100 para POS_A
     ultimaInterrupcion = tiempoInterrupcion;  // guarda valor actualizado del tiempo
 
 
   }  // de la interrupcion en variable static
+}
+
+
+void leerConfiguracion() {
+  Serial.println("Leyendo configuración desde la tarjeta SD...");
+
+  // Abre el archivo en modo de lectura
+  File file = SD.open(nombreArchivo);
+  if (file) {
+    // Lee las posiciones desde el archivo
+    AUX_STEPS_X = file.parseInt();
+    AUX_STEPS_Y = file.parseInt();
+
+    // Cierra el archivo
+    file.close();
+    Serial.println("Configuración leída correctamente.");
+  } else {
+    Serial.println("Archivo de configuración no encontrado. Usando valores predeterminados.");
+  }
+}
+void savesteps() {
+
+  // Abre el archivo en modo de lectura y escritura
+  File file = SD.open(nombreArchivo, FILE_WRITE);
+  if (file) {
+    // Posiciona el puntero de escritura al principio del archivo
+    file.seek(0);
+
+    // Sobrescribe los valores existentes
+    file.print(AUX_STEPS_X);
+    file.print('\n');
+    file.print(AUX_STEPS_Y);
+
+    // Trunca el archivo para eliminar cualquier contenido adicional
+    // Cierra y vuelve a abrir el archivo en modo de escritura para truncar
+    file.close();
+
+  } else {
+    Serial.println("Error al abrir el archivo para guardar configuración.");
+  }
 }
 
 void push_a() {
@@ -883,6 +965,7 @@ void motor_movement() {
   while (AUX_STEPS_Y < STEPSY) {
 
 
+
     digitalWrite(DIRY, HIGH);
 
     for (int i = 0; i < 100; i++) {
@@ -893,9 +976,13 @@ void motor_movement() {
     }
 
     AUX_STEPS_Y += 100;
+
+
   }
 
   while (AUX_STEPS_Y > STEPSY) {
+  
+
 
 
     digitalWrite(DIRY, LOW);
@@ -907,6 +994,8 @@ void motor_movement() {
       delayMicroseconds(VEL);
     }
     AUX_STEPS_Y -= 100;
+
+
   }
   while (AUX_STEPS_X < STEPSX) {
 
@@ -921,9 +1010,12 @@ void motor_movement() {
       delayMicroseconds(VEL);
     }
     AUX_STEPS_X += 150;
+
+
   }
 
   while (AUX_STEPS_X > STEPSX) {
+
 
 
 
@@ -938,5 +1030,10 @@ void motor_movement() {
     }
 
     AUX_STEPS_X -= 150;
+
+
   }
+
+  savesteps();
+
 }
