@@ -1,17 +1,11 @@
-
 #include <Wire.h>               // libreria de comunicacion por I2C
 #include <LCD.h>                // libreria para funciones de LCD
 #include <LiquidCrystal_I2C.h>  // libreria para LCD por I2C
-#include <RTClib.h>
-
-
-#include "FS.h"
+#include <RTClib.h>             // libraria para el modulo RTC, para medir el tiempo
+#include "FS.h"                 // Librerias de para memoria SD
 #include "SD.h"
 #include "SPI.h"
-
-
-
-
+#include <vector>               // Libreria para declarar vectores
 
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7);  // DIR, E, RW, RS, D4, D5, D6, D7
 
@@ -51,18 +45,14 @@ int DIRY = 14;
 int PULY = 27;
 int VEL = 300;
 
-
-
-
-
-
-
 volatile int POS_A = 0;      // variable POS_A con valor inicial de 50 y definida
 volatile int AUX_POS_A = 0;  //almacena el valor de pos_A
 volatile int AUX_POS_A2 = 0;
 
 int AUX_PRINT_A = 0;  // almacena valor AUX_PRINT_A de la variable POS_A para luego imprimirla
 
+
+//Almacena el número de capas requeridas por el usuario
 int NUM_CAPAS;
 
 volatile int POS_B = 0;
@@ -75,16 +65,23 @@ int opcion = 0;
 int menu = 0;
 
 
-int aux = 0;
+int aux = 0;   //almacena la opción que selecciona el usuario segun la interfaz que tenga
 bool boleana = 0;
 bool aux_submenu = 0;
 volatile int AUX_STEPS_X = 0;
 volatile int AUX_STEPS_Y = 0;
 
-int tiempo1 = 10;
-int tiempo2 = 5;
-int tiempo3 = 10;
-int tiempo4 = 5;
+
+int pag_actual; //Almacena la página actual en la opción de sub_menu
+int num_archivos; //Almacena el número de archivos en la memoria
+String archivoSeleccionado = ""; //almacena el nombre del archivo seleccionado
+struct Asociacion {//la estructura crea una relación entre cada nombre de archivo y un número
+  int identificador;
+  String nombreArchivo;
+};
+
+// Vector que contiene las asociaciones entre identificadores y nombres de archivo
+std::vector<Asociacion> asociaciones;
 
 void setup() {
   lcd.setBacklightPin(3, POSITIVE);  // puerto P3 de PCF8574 como positivo
@@ -111,11 +108,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(BUTTON_A), push_b, FALLING);  // interrupcion sobre pin A con
   attachInterrupt(digitalPinToInterrupt(CLK_A), encoder1, FALLING);   // interrupcion sobre pin A con
   attachInterrupt(digitalPinToInterrupt(CLK_B), encoder2, FALLING);   // interrupcion sobre pin A con
-
-
   Serial.begin(115200);
-  Serial.println("Listo");  // imprime en monitor serial Listo
-
 
 
   if (!rtc.begin()) {
@@ -126,21 +119,20 @@ void setup() {
   //rtc.adjust(DateTime(2023,08,10,11,17))
   //rtc.adjust(DateTime(__DATE__,__TIME__));
 
-
-
-
   if (!SD.begin(chipSelect)) {
     Serial.println("La inicialización de la tarjeta SD falló. Verifique la tarjeta SD en el ESP32 o Arduino.");
-    return;
+    while (1)
+      ;
   }
-  Serial.println("La tarjeta SD se ha inicializado correctamente.");
+
 }
 
 
 
 void loop() {
-  //Menú principal
+  print_vainterm();
 
+  //Menú principal
   if (digitalRead(BUTTON_A) == LOW) {
     delay(200);
   }
@@ -152,9 +144,26 @@ void loop() {
       AUX_PRINT_A = 0;
       POS_A = 0;
       AUX_POS_A = 0;
-
+      
+      if(archivoSeleccionado == ""){//si no hay un archivo seleccionado, selecciona el último que se guardo
+        asociacion_archivos();
+        archivoSeleccionado = obtenerNombreArchivo(num_archivos-1);
+        procesarArchivo(archivoSeleccionado); 
+      }else{//si hay un arhivo seleccionado, obtiene los datos de él
+        procesarArchivo(archivoSeleccionado); //recupera los datos del archivo seleccionado
+      }
       while (true) {
         num_capas();
+        if (boleana == 1) {
+          boleana = 0;
+          aux = 0;
+          AUX_PRINT_A = 0;
+          POS_A = 0;
+          AUX_POS_A = 0;   
+          lcd.clear();
+
+          break;
+        }    
 
         if (digitalRead(BUTTON_A) == LOW) {
           lcd.clear();
@@ -176,16 +185,11 @@ void loop() {
             lcd.setCursor(1, 4);
             lcd.print("T TOTAL: ");
 
-
             //Impresión del tiempo total
-
-
             for (int j = 0; j < NUMERO_PASO; j++) {
 
               STEPSX = X[j] * 150;
               STEPSY = Y[j] * 100;
-
-
 
               motor_movement();
               delay(500);
@@ -210,19 +214,18 @@ void loop() {
 
 
 
-                //impresión del tema dle paso
+                //impresión del tiempo del paso
                 lcd.setCursor(9, 2);
-                lcd.print(Transcurrido.minutes());  // funcion millis() / 1000 para segundos transcurridos
+                lcd.print(dosDigitos(Transcurrido.minutes()));  // funcion millis() / 1000 para segundos transcurridos
                 lcd.print(":");
-                lcd.print(Transcurrido.seconds());  // funcion millis() / 1000 para segundos transcurridos
+                lcd.print(dosDigitos(Transcurrido.seconds()));  // funcion millis() / 1000 para segundos transcurridos
                 lcd.print("  ");
 
-
-
+                //impresión del tiempo total desde el inicio del ciclo
                 lcd.setCursor(10, 4);
-                lcd.print(Tiempo_total.minutes());
+                lcd.print(dosDigitos(Tiempo_total.minutes()));
                 lcd.print(":");
-                lcd.print(Tiempo_total.seconds());
+                lcd.print(dosDigitos(Tiempo_total.seconds()));
                 lcd.print("  ");
               }
             }
@@ -251,7 +254,17 @@ void loop() {
       aux = 0;
       aux_submenu = 1;
       while (1) {
-
+        print_vainterm();
+        if (boleana == 1) {
+          boleana = 0;
+          aux = 0;
+          aux_submenu = 0;
+          AUX_PRINT_A = 0;
+          POS_A = 0;
+          AUX_POS_A = 0;
+          lcd.clear();
+          break;
+        }
 
         if (digitalRead(BUTTON_A) == LOW) {
           delay(200);
@@ -259,42 +272,78 @@ void loop() {
         if (digitalRead(BUTTON_B) == LOW) {
           delay(200);
         }
+
+
         //Menú de configuración
         switch (aux) {
 
           //Opción 1 de configuración = Cambiar modo
           case 1:
+      
+
             lcd.clear();
             AUX_PRINT_A = 0;
             POS_A = 0;
             AUX_POS_A = 0;
-
-            while (1) {
-              lcd.setCursor(0, 0);
-              lcd.print("MODOS:");
-              lcd.setCursor(1, 1);
-
-
-              if (POS_A != AUX_PRINT_A) {                                            // si el valor de POS_A es distinto de AUX_PRINT_A
-                Serial.println("x: " + String(POS_A) + " y: " + String(AUX_POS_B));  // imprime valor de POS_A
-                AUX_PRINT_A = POS_A;                                                 // asigna a AUX_PRINT_A el valor actualizado de POS_A
+            aux = 0;
+            asociacion_archivos();      //se crea una relación de números 1-1 a los nombres de archivos de los programas
+            pag_actual = 0;
+            mostrarPagina(pag_actual);
+            while(true){
+              if (digitalRead(BUTTON_B) == LOW) {
+                delay(200);
               }
-
+              print_vainterm();
               if (boleana == 1) {
                 boleana = 0;
                 aux = 0;
                 AUX_PRINT_A = 0;
                 POS_A = 0;
-                AUX_POS_A = 0;
+                AUX_POS_A = 0;   
                 lcd.clear();
                 break;
+              }    
+
+              switch(aux){
+                case 1:
+                  lcd.clear();
+                  lcd.setCursor(2, 1);
+                  lcd.print("GUARDADO EXISTOSO");
+                  archivoSeleccionado = obtenerNombreArchivo(num_archivos-pag_actual*3-aux);
+                  Serial.println(archivoSeleccionado);
+                  delay(2000);
+                  mostrarPagina(pag_actual);
+                  aux=0;
+                  break;
+                case 2:
+                  lcd.clear();
+                  lcd.setCursor(2, 1);
+                  lcd.print("GUARDADO EXISTOSO");
+                  archivoSeleccionado = obtenerNombreArchivo(num_archivos-pag_actual*3-aux);
+                  Serial.println(archivoSeleccionado);
+                  delay(2000);
+                  mostrarPagina(pag_actual);
+                  aux=0;
+                  break;
+
+                case 3: 
+                  lcd.clear();
+                  lcd.setCursor(2, 1);
+                  lcd.print("GUARDADO EXISTOSO");
+                  archivoSeleccionado = obtenerNombreArchivo(num_archivos-pag_actual*3-aux);
+                  Serial.println(archivoSeleccionado);
+                  aux=0;  
+                  delay(2000);
+                  mostrarPagina(pag_actual);
+                  aux=0;
+                  break;
+                default:
+                  sub_menu_modo(); 
               }
             }
-
             break;
 
-            //Opción 2 Modificar tiempos
-
+          //Opción 2 Modificar tiempos
           case 2:
             lcd.clear();
             AUX_PRINT_A = 0;
@@ -308,18 +357,8 @@ void loop() {
               if (digitalRead(BUTTON_B) == LOW) {
                 delay(200);
               }
-              sub_menu_tiempo();
 
-              if (POS_A != AUX_PRINT_A) {                                            // si el valor de POS_A es distinto de AUX_PRINT_A
-                Serial.println("x: " + String(POS_A) + " y: " + String(AUX_POS_B));  // imprime valor de POS_A
-                AUX_PRINT_A = POS_A;                                                 // asigna a AUX_PRINT_A el valor actualizado de POS_A
-              }
-
-              if (AUX_POS_B != AUX_PRINT_B) {                                        // si el valor de POS_A es distinto de AUX_PRINT_A
-                Serial.println("x: " + String(POS_A) + " y: " + String(AUX_POS_B));  // imprime valor de POS_A
-                AUX_PRINT_B = AUX_POS_B;                                             // asigna a AUX_PRINT_A el valor actualizado de POS_A
-              }
-
+              print_vainterm();
               if (boleana == 1) {
                 boleana = 0;
                 aux = 0;
@@ -371,8 +410,6 @@ void loop() {
 
               nuevo_modo();
               print_vainterm();
-
-
               // opción para salir del menú
               if (boleana == 1) {
                 boleana = 0;
@@ -380,8 +417,39 @@ void loop() {
                 AUX_PRINT_A = 0;
                 POS_A = 0;
                 AUX_POS_A = 0;
-                lcd.clear();
-                break;
+
+                DateTime inicio = rtc.now();
+                archivoSeleccionado = obtenerNombreArchivo(inicio);
+                
+                // Abrir el archivo en modo escritura
+                File archivo = SD.open("/"+archivoSeleccionado+".txt", FILE_WRITE);
+                if (archivo) {
+                  // Escribir cada elemento del arreglo en el archivo
+                  for (int i = 0; i < sizeof(X) / sizeof(X[0]); i++) {
+                    archivo.print(X[i]);
+                    archivo.print(' '); // Nueva línea
+                    archivo.print(Y[i]);
+                    archivo.print(' '); // Nueva línea
+                    archivo.print(MINUTOS[i]);
+                    archivo.print(' '); // Nueva línea
+                    archivo.print(SEGUNDOS[i]);
+                    archivo.print('\n'); // Nueva línea
+                  }
+                  archivo.close(); // Cerrar el archivo
+                  lcd.clear();
+                  lcd.setCursor(2, 1);
+                  lcd.print("GUARDADO EXITOSO");
+                } else {
+                  // Si no se pudo abrir el archivo
+                  lcd.setCursor(2, 1);
+                  lcd.print("ERROR AL GUARDAR.");
+                }
+                  delay(2000);
+
+                  lcd.clear();
+
+
+                  break;
               }
             }
 
@@ -393,29 +461,6 @@ void loop() {
             sub_menu();
         }
 
-
-        if (POS_A != AUX_PRINT_A) {                                            // si el valor de POS_A es distinto de AUX_PRINT_A
-          Serial.println("x: " + String(POS_A) + " y: " + String(AUX_POS_B));  // imprime valor de POS_A
-          AUX_PRINT_A = POS_A;                                                 // asigna a AUX_PRINT_A el valor actualizado de POS_A
-        }
-
-        if (AUX_POS_B != AUX_PRINT_B) {                                        // si el valor de POS_A es distinto de AUX_PRINT_A
-          Serial.println("x: " + String(POS_A) + " y: " + String(AUX_POS_B));  // imprime valor de POS_A
-          AUX_PRINT_B = AUX_POS_B;                                             // asigna a AUX_PRINT_A el valor actualizado de POS_A
-        }
-
-
-
-        if (boleana == 1) {
-          boleana = 0;
-          aux = 0;
-          aux_submenu = 0;
-          AUX_PRINT_A = 0;
-          POS_A = 0;
-          AUX_POS_A = 0;
-          lcd.clear();
-          break;
-        }
       }
       break;
     //En caso de que no se haya seleccionado nada, se imprime el menú principal
@@ -424,21 +469,36 @@ void loop() {
       hora();
   }
 
+}//Fin del programa
 
 
 
 
-  if (POS_A != AUX_PRINT_A) {                                            // si el valor de POS_A es distinto de AUX_PRINT_A
-    Serial.println("x: " + String(POS_A) + " y: " + String(AUX_POS_B));  // imprime valor de POS_A
-    AUX_PRINT_A = POS_A;                                                 // asigna a AUX_PRINT_A el valor actualizado de POS_A
-  }
-  if (AUX_POS_B != AUX_PRINT_B) {                                        // si el valor de POS_A es distinto de AUX_PRINT_A
-    Serial.println("x: " + String(POS_A) + " y: " + String(AUX_POS_B));  // imprime valor de POS_A
-    AUX_PRINT_B = AUX_POS_B;                                             // asigna a AUX_PRINT_A el valor actualizado de POS_A
-  }
+String obtenerNombreArchivo(DateTime fechaHora) {
+  String nombreArchivo = "";
+  // Construir el nombre del archivo usando los componentes de fecha y hora
+  nombreArchivo += String(fechaHora.year(), DEC);
+  nombreArchivo += "-";
+  nombreArchivo += dosDigitos(fechaHora.month());
+  nombreArchivo += "-";
+  nombreArchivo += dosDigitos(fechaHora.day());
+  nombreArchivo += "_";
+  nombreArchivo += dosDigitos(fechaHora.hour());
+  nombreArchivo += "-";
+  nombreArchivo += dosDigitos(fechaHora.minute());
+  nombreArchivo += "-";
+  nombreArchivo += dosDigitos(fechaHora.second());
+
+  return nombreArchivo;
 }
 
-
+String dosDigitos(int numero) {
+  if (numero < 10) {
+    return "0" + String(numero);
+  } else {
+    return String(numero);
+  }
+}
 
 void menu_inicial() {
   lcd.setCursor(1, 0);
@@ -516,149 +576,9 @@ void sub_menu() {
     AUX_POS_A = POS_A - 14;
   }
 
-  Serial.println("x: " + String(POS_A) + " y: " + String(AUX_POS_B));
 }
 
-void sub_menu_tiempo() {
 
-
-  lcd.setCursor(1, 0);
-  lcd.print("Paso 1: ");
-  lcd.print(tiempo1);
-  lcd.print(" min    ");
-
-
-  lcd.setCursor(1, 1);
-  lcd.print("Paso 2: ");
-  lcd.print(tiempo2);
-  lcd.print(" min    ");
-
-  lcd.setCursor(1, 2);
-  lcd.print("Paso 3: ");
-  lcd.print(tiempo3);
-  lcd.print(" min    ");
-
-  lcd.setCursor(1, 3);
-  lcd.print("Paso 4: ");
-  lcd.print(tiempo4);
-  lcd.print(" min    ");
-
-  AUX_POS_B = tiempo1;
-  while (POS_A >= 0 && POS_A < AUX_POS_A + 5) {
-
-    lcd.setCursor(1, 0);
-    lcd.print("Paso 1: ");
-    lcd.print(tiempo1);
-    lcd.print(" min    ");
-
-    lcd.setCursor(0, 1);
-    lcd.print(" ");
-    lcd.setCursor(0, 2);
-    lcd.print(" ");
-    lcd.setCursor(0, 3);
-    lcd.print(" ");
-
-    lcd.setCursor(0, 0);
-    lcd.print("-");
-
-
-
-    tiempo1 = AUX_POS_B;
-    if (boleana == 1) {
-      break;
-    }
-  }
-
-  AUX_POS_B = tiempo2;
-  while (POS_A >= AUX_POS_A + 5 && POS_A < AUX_POS_A + 10) {
-
-
-    lcd.setCursor(1, 1);
-    lcd.print("Paso 2: ");
-    lcd.print(tiempo2);
-    lcd.print(" min    ");
-
-    lcd.setCursor(0, 0);
-    lcd.print(" ");
-
-    lcd.setCursor(0, 2);
-    lcd.print(" ");
-
-    lcd.setCursor(0, 1);
-    lcd.print("-");
-
-    lcd.setCursor(0, 3);
-    lcd.print(" ");
-
-
-    tiempo2 = AUX_POS_B;
-    if (boleana == 1) {
-      break;
-    }
-  }
-  AUX_POS_B = tiempo3;
-  while (POS_A >= AUX_POS_A + 10 && POS_A < AUX_POS_A + 15) {
-
-    lcd.setCursor(1, 2);
-    lcd.print("Paso 3: ");
-    lcd.print(tiempo3);
-    lcd.print(" min    ");
-
-    lcd.setCursor(0, 1);
-    lcd.print(" ");
-
-    lcd.setCursor(0, 0);
-    lcd.print(" ");
-
-    lcd.setCursor(0, 2);
-    lcd.print("-");
-
-    lcd.setCursor(0, 3);
-    lcd.print(" ");
-
-    tiempo3 = AUX_POS_B;
-    if (boleana == 1) {
-      break;
-    }
-  }
-
-
-  AUX_POS_B = tiempo4;
-  while (POS_A >= AUX_POS_A + 15 && POS_A < AUX_POS_A + 20) {
-
-    lcd.setCursor(1, 3);
-    lcd.print("Paso 4: ");
-    lcd.print(tiempo4);
-    lcd.print(" min    ");
-
-    lcd.setCursor(0, 1);
-    lcd.print(" ");
-
-    lcd.setCursor(0, 0);
-    lcd.print(" ");
-
-    lcd.setCursor(0, 2);
-    lcd.print(" ");
-
-    lcd.setCursor(0, 3);
-    lcd.print("-");
-
-    tiempo4 = AUX_POS_B;
-
-
-
-    if (boleana == 1) {
-      break;
-    }
-  }
-
-  if (POS_A == AUX_POS_A + 20) {
-    AUX_POS_A = POS_A;
-  }
-  if (POS_A == AUX_POS_A - 1) {
-    AUX_POS_A = POS_A - 19;
-  }
-}
 
 
 void num_capas() {
@@ -674,12 +594,7 @@ void num_capas() {
 
 
 void nuevo_modo() {
-
-  // Movimiento de motor x
-
-
- 
-  
+  // Movimiento de motor x 
   motor_movement();
 
   if (digitalRead(BUTTON_A) == LOW) {
@@ -727,32 +642,19 @@ void hora() {
 
   lcd.setCursor(0, 3);  // ubica cursor en columna 0 y linea 1
   lcd.print("HORA: ");
-  lcd.print(fecha.hour());  // funcion millis() / 1000 para segundos transcurridos
+  lcd.print(dosDigitos(fecha.hour()));  // funcion millis() / 1000 para segundos transcurridos
   lcd.print(":");
-  lcd.print(fecha.minute());  // funcion millis() / 1000 para segundos transcurridos
+  lcd.print(dosDigitos(fecha.minute()));  // funcion millis() / 1000 para segundos transcurridos
   lcd.print(":");
-  lcd.print(fecha.second());  // funcion millis() / 1000 para segundos transcurridos
+  lcd.print(dosDigitos(fecha.second()));  // funcion millis() / 1000 para segundos transcurridos
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
 void encoder1() {
-  static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de
-                                                // tiempo de interrupcion
+  static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
   unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
 
-  if (tiempoInterrupcion - ultimaInterrupcion > 5) {  // rutina antirebote desestima
-                                                      // pulsos menores a 5 mseg.
+  if (tiempoInterrupcion - ultimaInterrupcion > 5) {  // rutina antirebote desestima  // pulsos menores a 5 mseg.
     if (digitalRead(DT_A) == HIGH)                    // si B es HIGH, sentido horario
     {
       POS_A++;  // incrementa POS_A en 1
@@ -773,7 +675,9 @@ void encoder1() {
       AUX_POS_A = 80;
     }
 */
-    POS_A = min(100, max(0, POS_A));      // establece limite inferior de 0 y
+
+    POS_A = max(0, POS_A);
+    //POS_A = min(100, max(0, POS_A));      // establece limite inferior de 0 y
     STEPSX = min(15000, max(0, STEPSX));  // establece limite inferior de 0 y
 
     // superior de 100 para POS_A
@@ -812,10 +716,6 @@ void encoder2() {
     }
 */
     AUX_POS_B = min(100, max(0, AUX_POS_B));  // establece limite inferior de 0 y
-
-
-
-
     STEPSY = min(10000, max(0, STEPSY));      // establece limite inferior de 0 y
 
     //savesteps();
@@ -892,22 +792,7 @@ void push_b() {
     aux = 3;
   }
 }
-int max(int num1, int num2) {
-  if (num1 > num2) {
-    return num1;
-  } else {
-    return num2;
-  }
-}
 
-
-int min(int num1, int num2) {
-  if (num1 > num2) {
-    return num2;
-  } else {
-    return num1;
-  }
-}
 
 
 void print_vainterm() {
@@ -1015,11 +900,6 @@ void motor_movement() {
   }
 
   while (AUX_STEPS_X > STEPSX) {
-
-
-
-
-
     digitalWrite(DIRX, LOW);
 
     for (int i = 0; i < 150; i++) {
@@ -1036,4 +916,176 @@ void motor_movement() {
 
   savesteps();
 
+}
+
+
+
+
+void sub_menu_modo() {
+
+  if (POS_A >= 0 && POS_A < AUX_POS_A + 5) {
+    lcd.setCursor(0, 1);
+    lcd.print("-");
+    lcd.setCursor(0, 2);
+    lcd.print(" ");
+    lcd.setCursor(0, 3);
+    lcd.print(" ");
+  }
+
+  if (POS_A >= AUX_POS_A + 5 && POS_A < AUX_POS_A + 10) {
+    lcd.setCursor(0, 1);
+    lcd.print(" ");
+    lcd.setCursor(0, 2);
+    lcd.print("-");    
+    lcd.setCursor(0, 3);
+    lcd.print(" ");
+  }
+
+  if (POS_A >= AUX_POS_A + 10 && POS_A < AUX_POS_A + 15) {
+    lcd.setCursor(0, 1);
+    lcd.print(" ");
+    lcd.setCursor(0, 2);
+    lcd.print(" ");
+    lcd.setCursor(0, 3);
+    lcd.print("-");
+  }
+  if (POS_A == AUX_POS_A + 15) {
+    AUX_POS_A = POS_A;
+    pag_actual = min(pag_actual + 1,num_archivos);
+    mostrarPagina(pag_actual);
+
+  }
+  if (POS_A == AUX_POS_A - 1) {
+    AUX_POS_A = POS_A - 14;
+    pag_actual = pag_actual - 1;
+    mostrarPagina(pag_actual);
+
+  }
+  
+
+}
+
+void mostrarPagina(int pagina) {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("*SELECCIONE UN MODO*");
+  int contador = 1;
+  for (int i = num_archivos-1-pagina*3; i > max(num_archivos-pagina*3-1-3,0) ; i--) {
+    lcd.setCursor(1, contador);
+    lcd.print(asociaciones[i].nombreArchivo.substring(0,16)); //2024-05-05_05_07
+    contador = contador + 1;
+  }
+}
+
+void asociacion_archivos(){
+// Abrir el directorio raíz
+File directorio = SD.open("/");
+// Si el directorio se abre correctamente
+num_archivos = 0;
+if (directorio) {
+  while (true) {  
+    // Abrir el siguiente archivo
+    File archivo = directorio.openNextFile();
+    
+    // Si no hay más archivos, salir del bucle
+    if (!archivo) {
+      break;
+    }
+    
+    // Imprimir el nombre del archivo
+    Serial.println(archivo.name());
+                    
+    // Agregar una nueva asociación al final del vector
+    asociaciones.push_back({num_archivos, archivo.name()});
+    
+    // Cerrar el archivo
+    archivo.close();
+    num_archivos = num_archivos + 1;
+  }
+  
+  // Cerrar el directorio
+  directorio.close();
+
+// Iterar sobre las asociaciones y mostrarlas en la consola
+//for (const auto& asociacion : asociaciones) {
+//  lcd.setCursor(contador_1+1, 0);
+//  lcd.print(asociacion.nombreArchivo);
+//}
+} else {
+  // Si no se puede abrir el directorio
+  Serial.println("Error al abrir el directorio raíz.");
+}
+
+
+}
+
+String obtenerNombreArchivo(int identificador) {
+  for (const auto& asociacion : asociaciones) {
+    if (asociacion.identificador == identificador) {
+      return asociacion.nombreArchivo;
+    }
+  }
+  // Si no se encuentra ninguna asociación para el identificador dado
+  return "";
+}
+void procesarArchivo(String nombreArchivo) {
+  File archivo = SD.open("/"+nombreArchivo);
+
+  if (!archivo) {
+    Serial.println("Error al abrir el archivo.");
+    return;
+  }
+
+  Serial.println("Leyendo datos del archivo:");
+
+  // Leer cada línea del archivo
+  int contador = 0;
+  int aux=0;
+  while (archivo.available()) {
+    String linea = archivo.readStringUntil('\n'); // Leer una línea del archivo
+    // Extraer los números de la línea
+    X[contador] = linea.substring(0, linea.indexOf(' ')).toInt();
+    linea.remove(0, linea.indexOf(' ') + 1); // Eliminar la parte ya leída de la línea
+    Y[contador] = linea.substring(0, linea.indexOf(' ')).toInt();
+    linea.remove(0, linea.indexOf(' ') + 1);
+    MINUTOS[contador] = linea.substring(0, linea.indexOf(' ')).toInt();
+    linea.remove(0, linea.indexOf(' ') + 1);
+    SEGUNDOS[contador] = linea.toInt();
+
+    // Imprimir los datos en la consola
+    Serial.print("Columna 1: ");
+    Serial.print(X[contador]);
+    Serial.print(", Columna 2: ");
+    Serial.print(Y[contador]);
+    Serial.print(", Columna 3: ");
+    Serial.print(MINUTOS[contador]);
+    Serial.print(", Columna 4: ");
+    Serial.println(SEGUNDOS[contador]);
+    
+    if(X[contador]==0 && Y[contador]==0 && MINUTOS[contador]==0 && SEGUNDOS[contador]==0 && aux==0){
+      NUMERO_PASO = contador+1;
+      aux=1;
+    }
+    contador = contador + 1;
+
+  }
+
+  archivo.close(); // Cerrar el archivo
+}
+
+
+int max(int num1, int num2) {
+  if (num1 > num2) {
+    return num1;
+  } else {
+    return num2;
+  }
+}
+
+int min(int num1, int num2) {
+  if (num1 > num2) {
+    return num2;
+  } else {
+    return num1;
+  }
 }
