@@ -24,6 +24,7 @@ int STEPSY = 0;
 int STEPSX = 0;
 int AUX_STEPSX;
 int AUX_STEPSY;
+
 //Counter of steps in a routine
 int NUMERO_PASO = 0;
 //Steps of the routine
@@ -86,12 +87,18 @@ struct Asociacion {//la estructura crea una relación entre cada nombre de archi
 // Vector que contiene las asociaciones entre identificadores y nombres de archivo
 std::vector<Asociacion> asociaciones;
 
-/*
+
 class Encoder {
   private: 
     volatile int POS_A = 0;      // variable POS_A con valor inicial de 50 y definida
     volatile int AUX_POS_A = 0;  //almacena el valor de pos_A
     volatile int AUX_POS_A2 = 0;
+        
+    int STEPSY = 0;
+    int STEPSX = 0;
+    int AUX_STEPSX;
+    int AUX_STEPSY;
+
   public:
 
     void encoder1(){
@@ -166,7 +173,7 @@ class Encoder {
 
 };
 
-*/
+
 
 class Interface{
   private:
@@ -199,10 +206,7 @@ class Interface{
       if (POS_A == AUX_POS_A - 1) {
         AUX_POS_A = POS_A - 9;
       }
-    }
-    
 
-    void hora() {
       DateTime fecha = rtc.now();
 
       lcd.setCursor(0, 3);  // ubica cursor en columna 0 y linea 1
@@ -212,7 +216,9 @@ class Interface{
       lcd.print(dosDigitos(fecha.minute()));  // funcion millis() / 1000 para segundos transcurridos
       lcd.print(":");
       lcd.print(dosDigitos(fecha.second()));  // funcion millis() / 1000 para segundos transcurridos
+
     }
+    
 
 
     String dosDigitos(int numero) {
@@ -265,6 +271,7 @@ void loop(){
 
   Inter.menu_inicial();
 
+
 }
 
 
@@ -283,15 +290,6 @@ void encoder1() {
     }
 
 
-    /*
-    if (POS_A >100){
-      POS_A = 0;
-      AUX_POS_A = 0;
-    }
-    if(POS_A <0){
-      POS_A = 100;
-      AUX_POS_A = 80;
-    } */
   POS_A = max(0, POS_A);
   //POS_A = min(100, max(0, POS_A));      // establece limite inferior de 0 y
   STEPSX = min(15000, max(0, STEPSX));  // establece limite inferior de 0 y
