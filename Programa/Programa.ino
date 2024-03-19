@@ -7,8 +7,6 @@
 #include "SPI.h"
 #include <vector>               // Libreria para declarar vectores
 
-
-
 LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7);  // DIR, E, RW, RS, D4, D5, D6, D7
 
 RTC_DS3231 rtc;
@@ -652,9 +650,6 @@ void hora() {
 }
 
 
-
-
-
 void encoder1() {
   static unsigned long ultimaInterrupcion = 0;  // variable static con ultimo valor de // tiempo de interrupcion
   unsigned long tiempoInterrupcion = millis();  // variable almacena valor de func. millis
@@ -678,15 +673,17 @@ void encoder1() {
     if(POS_A <0){
       POS_A = 100;
       AUX_POS_A = 80;
-    } */
-  POS_A = max(0, POS_A);
-  //POS_A = min(100, max(0, POS_A));      // establece limite inferior de 0 y
-  STEPSX = min(15000, max(0, STEPSX));  // establece limite inferior de 0 y
+    }
+*/
 
-  // superior de 100 para POS_A
-  ultimaInterrupcion = tiempoInterrupcion;  // guarda valor actualizado del tiempo
-}          
-                                // de la interrupcion en variable static
+    POS_A = max(0, POS_A);
+    //POS_A = min(100, max(0, POS_A));      // establece limite inferior de 0 y
+    STEPSX = min(15000, max(0, STEPSX));  // establece limite inferior de 0 y
+
+    // superior de 100 para POS_A
+    ultimaInterrupcion = tiempoInterrupcion;  // guarda valor actualizado del tiempo
+  }          
+                                   // de la interrupcion en variable static
 
 }
 
@@ -716,7 +713,8 @@ void encoder2() {
     if(AUX_POS_B <0){
       AUX_POS_B = 100;
       POS_B = 80;
-    }*/
+    }
+*/
     AUX_POS_B = min(100, max(0, AUX_POS_B));  // establece limite inferior de 0 y
     STEPSY = min(10000, max(0, STEPSY));      // establece limite inferior de 0 y
 
@@ -844,8 +842,6 @@ void time_of_steps() {
     }
   }
 }
-
-
 
 void motor_movement() {
 
@@ -982,43 +978,43 @@ void mostrarPagina(int pagina) {
 }
 
 void asociacion_archivos(){
-  // Abrir el directorio raíz
-  File directorio = SD.open("/");
-  // Si el directorio se abre correctamente
-  num_archivos = 0;
-  if (directorio) {
-    while (true) {  
-      // Abrir el siguiente archivo
-      File archivo = directorio.openNextFile();
-      
-      // Si no hay más archivos, salir del bucle
-      if (!archivo) {
-        break;
-      }
-      
-      // Imprimir el nombre del archivo
-      Serial.println(archivo.name());
-                      
-      // Agregar una nueva asociación al final del vector
-      asociaciones.push_back({num_archivos, archivo.name()});
-      
-      // Cerrar el archivo
-      archivo.close();
-      num_archivos = num_archivos + 1;
+// Abrir el directorio raíz
+File directorio = SD.open("/");
+// Si el directorio se abre correctamente
+num_archivos = 0;
+if (directorio) {
+  while (true) {  
+    // Abrir el siguiente archivo
+    File archivo = directorio.openNextFile();
+    
+    // Si no hay más archivos, salir del bucle
+    if (!archivo) {
+      break;
     }
     
-    // Cerrar el directorio
-    directorio.close();
-
-  // Iterar sobre las asociaciones y mostrarlas en la consola
-  //for (const auto& asociacion : asociaciones) {
-  //  lcd.setCursor(contador_1+1, 0);
-  //  lcd.print(asociacion.nombreArchivo);
-  //}
-  } else {
-    // Si no se puede abrir el directorio
-    Serial.println("Error al abrir el directorio raíz.");
+    // Imprimir el nombre del archivo
+    Serial.println(archivo.name());
+                    
+    // Agregar una nueva asociación al final del vector
+    asociaciones.push_back({num_archivos, archivo.name()});
+    
+    // Cerrar el archivo
+    archivo.close();
+    num_archivos = num_archivos + 1;
   }
+  
+  // Cerrar el directorio
+  directorio.close();
+
+// Iterar sobre las asociaciones y mostrarlas en la consola
+//for (const auto& asociacion : asociaciones) {
+//  lcd.setCursor(contador_1+1, 0);
+//  lcd.print(asociacion.nombreArchivo);
+//}
+} else {
+  // Si no se puede abrir el directorio
+  Serial.println("Error al abrir el directorio raíz.");
+}
 
 
 }
